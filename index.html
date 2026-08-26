@@ -4,6 +4,8 @@
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>Gesture Music</title>
+  <!-- Inline SVG favicon (avoids /favicon.ico 404) -->
+  <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'%3E%3Ccircle cx='50' cy='50' r='40' fill='%237fe7c4'/%3E%3C/svg%3E">
   <style>
     :root { color-scheme: dark; }
     * { box-sizing: border-box; }
@@ -14,7 +16,7 @@
     .controls { display:flex; flex-wrap:wrap; gap:.75rem; justify-content:center; margin:1.4rem 0; }
     button { border:1px solid #7fe7c4; border-radius:999px; background:#17233f; color:#f7f7ff; padding:.8rem 1.1rem; font:inherit; cursor:pointer; }
     button:hover { background:#294070; }
-    #stage { position:relative; min-height:390px; display:grid; place-items:center; overflow:hidden; border:1px solid #5e6f9e; border-radius:28px; cursor:crosshair; background:radial-gradient(circle at 50% 50%, rgba(127, 231, 196, .1) 0%, rgba(11, 16, 32, 0) 70%); }
+    #stage { position:relative; min-height:390px; display:grid; place-items:center; overflow:hidden; border:1px solid #5e6f9e; border-radius:28px; cursor:crosshair; background:radial-gradient(circle at 10% 20%, rgba(124,170,255,.06), transparent 10%), radial-gradient(circle at 90% 80%, rgba(98,126,234,.05), transparent 10%), linear-gradient(180deg, rgba(255,255,255,.01), rgba(0,0,0,.02)); }
     #camera { display:none; width:100%; height:100%; min-height:390px; object-fit:cover; transform:scaleX(-1); }
     #stage.camera-on #camera { display:block; }
     #stage.camera-on { background:#000; }
@@ -95,10 +97,11 @@
     async function createTracker() {
       if (tracker) return tracker;
       status.textContent = 'Loading hand tracking…';
+      // re-ordered/fewer broken import URLs to reduce noisy 404s
       const importUrls = [
-        "https://cdn.jsdelivr.net/npm/@mediapipe/tasks-vision@0.10.22/+esm",
-        "https://cdn.jsdelivr.net/npm/@mediapipe/tasks-vision/+esm",
         "https://unpkg.com/@mediapipe/tasks-vision?module",
+        "https://cdn.jsdelivr.net/npm/@mediapipe/tasks-vision/+esm",
+        "https://unpkg.com/@mediapipe/tasks-vision@latest?module",
         "https://cdn.jsdelivr.net/npm/@mediapipe/tasks-vision@latest/+esm"
       ];
 
@@ -122,15 +125,31 @@
 
       const { FilesetResolver, HandLandmarker } = mp;
 
+      // try unpkg first, then jsdelivr — this order reduces mismatched layouts
       const wasmBases = [
-        "https://cdn.jsdelivr.net/npm/@mediapipe/tasks-vision@latest/wasm",
+        "https://unpkg.com/@mediapipe/tasks-vision/wasm",
         "https://cdn.jsdelivr.net/npm/@mediapipe/tasks-vision/wasm",
-        "https://unpkg.com/@mediapipe/tasks-vision/wasm"
+        "https://cdn.jsdelivr.net/npm/@mediapipe/tasks-vision@latest/wasm"
       ];
 
       let vision = null;
       for (const base of wasmBases) {
         try {
+          console.log('Checking wasm base', base);
+          // probe the expected glue file to provide clearer diagnostics in DevTools
+          const checkUrl = base.replace(/\/$/, '') + '/vision_wasm_internal.js';
+          try {
+            const head = await fetch(checkUrl, { method: 'HEAD' });
+            console.log(checkUrl, 'HEAD', head.status, head.headers.get('content-type'));
+            if (!head.ok) {
+              console.warn('WASM base HEAD check failed, skipping FilesetResolver for', base);
+              continue;
+            }
+          } catch (headErr) {
+            // If HEAD is blocked by CORS or otherwise errors, log and still try FilesetResolver
+            console.warn('HEAD check for', checkUrl, 'failed:', headErr);
+          }
+
           console.log('Trying FilesetResolver.forVisionTasks with', base);
           vision = await FilesetResolver.forVisionTasks(base);
           console.log('FilesetResolver succeeded with', base);

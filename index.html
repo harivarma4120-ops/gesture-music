@@ -178,12 +178,14 @@
       return { x: (event.clientX - rect.left) / rect.width, y: (event.clientY - rect.top) / rect.height };
     }
 
-    stage.addEventListener('pointerdown', event => {
+    stage.addEventListener('pointerdown', async event => {
       if (cameraActive) return;
       mouseActive = true;
       stage.setPointerCapture(event.pointerId);
-      setupAudio(); audio.resume();
-      const {x,y} = pointerPosition(event); setSound(x,y,true);
+      setupAudio();
+      await audio.resume();
+      const {x,y} = pointerPosition(event);
+      setSound(x,y,true);
     });
     stage.addEventListener('pointermove', event => {
       if (cameraActive || !mouseActive || !audio) return;
